@@ -1,5 +1,13 @@
 {
   "version": "5",
+  "specifiers": {
+    "jsr:@grammyjs/grammy@2.0.0-beta.8": "2.0.0-beta.8"
+  },
+  "jsr": {
+    "@grammyjs/grammy@2.0.0-beta.8": {
+      "integrity": "798826d52df65ee98a9167e6203d1e19eef1f78cf9a7198505873c3ce80f6979"
+    }
+  },
   "workspace": {
     "dependencies": [
       "jsr:@grammyjs/grammy@2.0.0-beta.8"
