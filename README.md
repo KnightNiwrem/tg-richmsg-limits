@@ -15,15 +15,17 @@ whether an array of Telegram `InputRichBlock`s adheres to the
 It does **not** try to validate whether the message renders correctly; it only
 checks these limits.
 
-Types come from [grammY](https://grammy.dev) (`grammy/types`).
+Types are derived from
+[`@grammyjs/grammy/types`](https://jsr.io/@grammyjs/grammy) on JSR and
+re-exported by this library.
 
 ## Usage
 
 ```ts
-import type { InputRichBlock } from "grammy/types";
 import {
   assertRichBlocks,
   checkRichBlocks,
+  type InputRichBlock,
   isWithinRichMessageLimits,
   measureRichBlocks,
 } from "./mod.ts";
@@ -90,14 +92,16 @@ deno task check   # fmt --check, lint, typecheck, test
 deno test
 ```
 
-## Using the JSR build of grammY
+## grammY types
 
-This repo pins `grammy/types` to `npm:grammy` in `deno.json`. If you prefer the
-JSR build, change the import map entry to:
+This repo pins the type-only dependency to grammY 2.0.0-beta.8 on JSR:
 
 ```json
-"grammy/types": "jsr:@grammyjs/grammy@^1.45.1/types"
+"@grammyjs/grammy/types": "jsr:@grammyjs/grammy@2.0.0-beta.8/types"
 ```
+
+Consumers normally import `InputRichBlock`, `RichBlockTableCell`, and `RichText`
+from this library rather than depending on grammY directly.
 
 ## License
 

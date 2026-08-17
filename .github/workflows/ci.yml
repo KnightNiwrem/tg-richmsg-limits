@@ -20,4 +20,4 @@ jobs:
       - if: matrix.job == 'lint'
         run: deno lint
       - if: matrix.job == 'test'
-        run: deno check mod.ts mod_test.ts && deno test
+        run: deno check --frozen mod.ts mod_test.ts && deno test --frozen
