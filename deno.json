@@ -8,7 +8,7 @@
     "test": "deno test"
   },
   "imports": {
-    "grammy/types": "npm:grammy@^1.45.1/types"
+    "@grammyjs/grammy/types": "jsr:@grammyjs/grammy@2.0.0-beta.8/types"
   },
   "fmt": {
     "lineWidth": 80

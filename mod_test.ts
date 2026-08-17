@@ -1,17 +1,15 @@
 import nodeAssert from "node:assert/strict";
-import type {
-  InputRichBlock,
-  RichBlockTableCell,
-  RichText,
-} from "grammy/types";
 import {
   assertRichBlocks,
   checkRichBlocks,
+  type InputRichBlock,
   isWithinRichMessageLimits,
   measureRichBlocks,
   measureTextLength,
   RICH_MESSAGE_LIMITS,
+  type RichBlockTableCell,
   RichMessageLimitError,
+  type RichText,
 } from "./mod.ts";
 
 // ---------------------------------------------------------------------------

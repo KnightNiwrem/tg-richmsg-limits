@@ -31,12 +31,51 @@
  */
 
 import type {
-  InputRichBlock,
-  RichBlockTableCell,
-  RichText,
-} from "grammy/types";
+  InputRichBlock as GrammyInputRichBlock,
+  RichBlockTableCell as GrammyRichBlockTableCell,
+  RichText as GrammyRichText,
+} from "@grammyjs/grammy/types";
 
-export type { InputRichBlock, RichBlockTableCell, RichText };
+// grammY 2.0.0-beta.8's published RichText alias omits Telegram's string and
+// array variants. Rebuild rich-text entities and every block field that uses
+// that alias so this library preserves the complete Bot API input shape.
+interface RichTextContainer {
+  text: RichText;
+}
+
+type WidenRichTextEntity<T> = T extends { text: GrammyRichText }
+  ? Omit<T, "text"> & RichTextContainer
+  : never;
+
+type RichTextEntityWithText = WidenRichTextEntity<GrammyRichText>;
+
+type RichTextEntityWithoutText = Exclude<
+  GrammyRichText,
+  { text: GrammyRichText }
+>;
+
+/** Rich text, including the plain-string and array forms accepted by Telegram. */
+export type RichText =
+  | string
+  | RichText[]
+  | RichTextEntityWithText
+  | RichTextEntityWithoutText;
+
+type WithRichText<T> = T extends readonly (infer U)[] ? WithRichText<U>[]
+  : T extends object ? {
+      [K in keyof T]: [NonNullable<T[K]>] extends [GrammyRichText]
+        ? [GrammyRichText] extends [NonNullable<T[K]>]
+          ? RichText | Extract<T[K], null | undefined>
+        : WithRichText<T[K]>
+        : WithRichText<T[K]>;
+    }
+  : T;
+
+/** A rich block with Telegram's complete recursive rich-text input type. */
+export type InputRichBlock = WithRichText<GrammyInputRichBlock>;
+
+/** A table cell with Telegram's complete recursive rich-text input type. */
+export type RichBlockTableCell = WithRichText<GrammyRichBlockTableCell>;
 
 /** The set of numeric limits that a rich message must adhere to. */
 export interface RichMessageLimits {
