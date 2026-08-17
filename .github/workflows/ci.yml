@@ -5,9 +5,19 @@ on:
 jobs:
   check:
     runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        job: [fmt, lint, test]
+    name: ${{ matrix.job }}
     steps:
       - uses: actions/checkout@v4
       - uses: denoland/setup-deno@v2
         with:
           deno-version: v2.x
-      - run: deno task check
+      - if: matrix.job == 'fmt'
+        run: deno fmt --check
+      - if: matrix.job == 'lint'
+        run: deno lint
+      - if: matrix.job == 'test'
+        run: deno check mod.ts mod_test.ts && deno test
