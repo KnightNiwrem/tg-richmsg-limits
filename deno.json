@@ -1,0 +1,16 @@
+{
+  "name": "@knightniwrem/tg-richmsg-limits",
+  "version": "0.1.0",
+  "license": "MIT",
+  "exports": "./mod.ts",
+  "tasks": {
+    "check": "deno fmt --check && deno lint && deno check mod.ts mod_test.ts && deno test",
+    "test": "deno test"
+  },
+  "imports": {
+    "grammy/types": "npm:grammy@^1.45.1/types"
+  },
+  "fmt": {
+    "lineWidth": 80
+  }
+}
