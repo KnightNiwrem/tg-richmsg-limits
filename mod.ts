@@ -178,45 +178,6 @@ function addText(acc: Accumulator, text: string): void {
   acc.textLength += measureTextLength(text, acc.mode);
 }
 
-/**
- * Walks a {@linkcode RichText} value.
- *
- * `depth` is the nesting depth of the *container* of this text. Plain strings
- * and arrays do not add a level; every formatting entity (bold, italic, url,
- * …) adds one.
- */
-function walkRichText(
-  text: RichText | undefined,
-  depth: number,
-  acc: Accumulator,
-): void {
-  if (text === undefined) return;
-  if (typeof text === "string") {
-    addText(acc, text);
-    return;
-  }
-  if (Array.isArray(text)) {
-    for (const part of text) walkRichText(part, depth, acc);
-    return;
-  }
-  const level = depth + 1;
-  bump(acc, level);
-  switch (text.type) {
-    case "custom_emoji":
-      addText(acc, text.alternative_text);
-      return;
-    case "mathematical_expression":
-      addText(acc, text.expression);
-      return;
-    case "anchor":
-      // Anchors have no user visible text.
-      return;
-    default:
-      walkRichText(text.text, level, acc);
-      return;
-  }
-}
-
 /** Computes the number of columns of a table, honouring col/rowspans. */
 function tableColumnCount(cells: RichBlockTableCell[][]): number {
   // occupied[r] holds the set of columns already taken in row r by
@@ -251,101 +212,230 @@ function tableColumnCount(cells: RichBlockTableCell[][]): number {
   return width;
 }
 
+type WalkItem =
+  | { kind: "block"; block: InputRichBlock; depth: number }
+  | { kind: "rich_text"; text: RichText | undefined; depth: number }
+  | { kind: "list_item"; blocks: readonly InputRichBlock[]; depth: number }
+  | {
+    kind: "table_row";
+    cells: readonly RichBlockTableCell[];
+    depth: number;
+  };
+
+function pushBlocks(
+  stack: WalkItem[],
+  blocks: readonly InputRichBlock[],
+  depth: number,
+): void {
+  for (let i = blocks.length - 1; i >= 0; i--) {
+    stack.push({ kind: "block", block: blocks[i], depth });
+  }
+}
+
 /**
- * Walks a list of blocks. `depth` is the nesting depth at which these blocks
- * live (0 for the top level).
+ * Iteratively walks a list of blocks and all nested rich text.
+ *
+ * `depth` is the nesting depth at which the blocks live (0 for the top
+ * level). Plain strings and rich-text arrays do not add a level; every
+ * formatting entity, block, list item, and table row adds one.
  */
 function walkBlocks(
   blocks: readonly InputRichBlock[],
   depth: number,
   acc: Accumulator,
 ): void {
-  for (const block of blocks) walkBlock(block, depth, acc);
-}
+  const stack: WalkItem[] = [];
+  pushBlocks(stack, blocks, depth);
 
-function walkBlock(block: InputRichBlock, depth: number, acc: Accumulator) {
-  const level = depth + 1;
-  acc.blockCount++;
-  bump(acc, level);
+  while (stack.length > 0) {
+    const item = stack.pop()!;
 
-  switch (block.type) {
-    case "paragraph":
-    case "heading":
-    case "pre":
-    case "footer":
-    case "thinking":
-      walkRichText(block.text, level, acc);
-      return;
+    switch (item.kind) {
+      case "rich_text": {
+        const { text, depth } = item;
+        if (text === undefined) break;
+        if (typeof text === "string") {
+          addText(acc, text);
+          break;
+        }
+        if (Array.isArray(text)) {
+          for (let i = text.length - 1; i >= 0; i--) {
+            stack.push({ kind: "rich_text", text: text[i], depth });
+          }
+          break;
+        }
 
-    case "divider":
-    case "anchor":
-      return;
+        const level = depth + 1;
+        bump(acc, level);
+        switch (text.type) {
+          case "custom_emoji":
+            addText(acc, text.alternative_text);
+            break;
+          case "mathematical_expression":
+            addText(acc, text.expression);
+            break;
+          case "anchor":
+            // Anchors have no user visible text.
+            break;
+          default:
+            stack.push({ kind: "rich_text", text: text.text, depth: level });
+            break;
+        }
+        break;
+      }
 
-    case "mathematical_expression":
-      addText(acc, block.expression);
-      return;
-
-    case "pullquote":
-      walkRichText(block.text, level, acc);
-      walkRichText(block.credit, level, acc);
-      return;
-
-    case "blockquote":
-      walkRichText(block.credit, level, acc);
-      walkBlocks(block.blocks, level, acc);
-      return;
-
-    case "details":
-      walkRichText(block.summary, level, acc);
-      walkBlocks(block.blocks, level, acc);
-      return;
-
-    case "list":
-      for (const item of block.items) {
+      case "list_item": {
         // List items count as blocks and as a nesting level.
         acc.blockCount++;
-        const itemLevel = level + 1;
-        bump(acc, itemLevel);
-        walkBlocks(item.blocks, itemLevel, acc);
+        const level = item.depth + 1;
+        bump(acc, level);
+        pushBlocks(stack, item.blocks, level);
+        break;
       }
-      return;
 
-    case "collage":
-    case "slideshow":
-      walkRichText(block.caption?.text, level, acc);
-      walkRichText(block.caption?.credit, level, acc);
-      walkBlocks(block.blocks, level, acc);
-      return;
-
-    case "table": {
-      walkRichText(block.caption, level, acc);
-      const cols = tableColumnCount(block.cells);
-      if (cols > acc.maxTableColumns) acc.maxTableColumns = cols;
-      for (const row of block.cells) {
+      case "table_row": {
         // Table rows count as blocks and as a nesting level.
         acc.blockCount++;
-        const rowLevel = level + 1;
-        bump(acc, rowLevel);
-        for (const cell of row) walkRichText(cell.text, rowLevel, acc);
+        const level = item.depth + 1;
+        bump(acc, level);
+        for (let i = item.cells.length - 1; i >= 0; i--) {
+          stack.push({
+            kind: "rich_text",
+            text: item.cells[i].text,
+            depth: level,
+          });
+        }
+        break;
       }
-      return;
+
+      case "block": {
+        const { block, depth } = item;
+        const level = depth + 1;
+        acc.blockCount++;
+        bump(acc, level);
+
+        switch (block.type) {
+          case "paragraph":
+          case "heading":
+          case "pre":
+          case "footer":
+          case "thinking":
+            stack.push({ kind: "rich_text", text: block.text, depth: level });
+            break;
+
+          case "divider":
+          case "anchor":
+            break;
+
+          case "mathematical_expression":
+            addText(acc, block.expression);
+            break;
+
+          case "pullquote":
+            stack.push(
+              { kind: "rich_text", text: block.credit, depth: level },
+              { kind: "rich_text", text: block.text, depth: level },
+            );
+            break;
+
+          case "blockquote":
+            pushBlocks(stack, block.blocks, level);
+            stack.push({ kind: "rich_text", text: block.credit, depth: level });
+            break;
+
+          case "details":
+            pushBlocks(stack, block.blocks, level);
+            stack.push({
+              kind: "rich_text",
+              text: block.summary,
+              depth: level,
+            });
+            break;
+
+          case "list":
+            for (let i = block.items.length - 1; i >= 0; i--) {
+              stack.push({
+                kind: "list_item",
+                blocks: block.items[i].blocks,
+                depth: level,
+              });
+            }
+            break;
+
+          case "collage":
+          case "slideshow":
+            pushBlocks(stack, block.blocks, level);
+            stack.push(
+              {
+                kind: "rich_text",
+                text: block.caption?.credit,
+                depth: level,
+              },
+              {
+                kind: "rich_text",
+                text: block.caption?.text,
+                depth: level,
+              },
+            );
+            break;
+
+          case "table": {
+            const cols = tableColumnCount(block.cells);
+            if (cols > acc.maxTableColumns) acc.maxTableColumns = cols;
+            for (let i = block.cells.length - 1; i >= 0; i--) {
+              stack.push({
+                kind: "table_row",
+                cells: block.cells[i],
+                depth: level,
+              });
+            }
+            stack.push({
+              kind: "rich_text",
+              text: block.caption,
+              depth: level,
+            });
+            break;
+          }
+
+          case "map":
+            // Maps are not media attachments (photos, videos, audio files).
+            stack.push(
+              {
+                kind: "rich_text",
+                text: block.caption?.credit,
+                depth: level,
+              },
+              {
+                kind: "rich_text",
+                text: block.caption?.text,
+                depth: level,
+              },
+            );
+            break;
+
+          case "photo":
+          case "video":
+          case "animation":
+          case "audio":
+          case "voice_note":
+            acc.mediaCount++;
+            stack.push(
+              {
+                kind: "rich_text",
+                text: block.caption?.credit,
+                depth: level,
+              },
+              {
+                kind: "rich_text",
+                text: block.caption?.text,
+                depth: level,
+              },
+            );
+            break;
+        }
+        break;
+      }
     }
-
-    case "map":
-      // Maps are not media attachments (photos, videos, audio files).
-      walkRichText(block.caption?.text, level, acc);
-      walkRichText(block.caption?.credit, level, acc);
-      return;
-
-    case "photo":
-    case "video":
-    case "animation":
-    case "audio":
-    case "voice_note":
-      acc.mediaCount++;
-      walkRichText(block.caption?.text, level, acc);
-      walkRichText(block.caption?.credit, level, acc);
-      return;
   }
 }
 

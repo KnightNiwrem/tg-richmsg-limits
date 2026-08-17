@@ -304,6 +304,26 @@ Deno.test("nesting depth limit: 16 ok, 17 fails", () => {
   assertEquals(mixed.stats.maxNestingDepth, max + 1);
 });
 
+Deno.test("deeply nested formatting reports a violation without overflowing", () => {
+  const depth = 20_000;
+  const r = checkRichBlocks([p(nestBold("x", depth))]);
+  assertFalse(r.ok);
+  assertEquals(r.stats.maxNestingDepth, depth + 1);
+  assertEquals(r.violations.map((v) => v.limit), ["maxNestingDepth"]);
+});
+
+Deno.test("deeply nested blocks report violations without overflowing", () => {
+  const depth = 20_000;
+  const r = checkRichBlocks([nestQuotes(p("x"), depth)]);
+  assertFalse(r.ok);
+  assertEquals(r.stats.blockCount, depth + 1);
+  assertEquals(r.stats.maxNestingDepth, depth + 1);
+  assertEquals(r.violations.map((v) => v.limit), [
+    "maxBlocks",
+    "maxNestingDepth",
+  ]);
+});
+
 // ---------------------------------------------------------------------------
 // Media attachments
 // ---------------------------------------------------------------------------
